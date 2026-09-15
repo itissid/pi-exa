@@ -4,11 +4,15 @@ import {
   type ExtensionUIContext,
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { getExa, resetExa } from "./exa";
-import { closeExaMcp, getExaMcp, getExaMcpTools } from "./exa_mcp";
+import {
+  callExaMcpTool,
+  checkExaMcp,
+  closeExaMcp,
+} from "./exa_mcp";
+import { EXA_MCP_TOOLS } from "./exa_mcp_tools";
 import { deepSearch, DeepSearchParams } from "./exa_deep_search";
 import { abortPromise, renderCall, renderTruncatedResult } from "./utils";
 import { getPiExaConfig, setPiExaConfig } from "./config";
@@ -59,7 +63,6 @@ export default async function (pi: ExtensionAPI) {
     return;
   }
 
-  let mcpToolsLoaded = false;
   const registeredExaToolNames: string[] = [];
 
   async function getExaApiKey(mcp = false) {
@@ -149,12 +152,6 @@ export default async function (pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
     await syncToolAvailability();
     await updateDeepSearchStatus(ctx);
-    if (!mcpToolsLoaded) {
-      ctx.ui.notify(
-        "Exa MCP tools were not registered as the MCP server was unavailable. /reload to try again.",
-        "warning",
-      );
-    }
   });
 
   pi.registerCommand("exa-enable", {
@@ -254,8 +251,7 @@ export default async function (pi: ExtensionAPI) {
       ctx.ui.setStatus("pi-exa", "Checking Exa MCP...");
       const mcpHealthy = await (async () => {
         try {
-          const client = await getExaMcp(await getExaApiKey(true));
-          await client.listTools();
+          await checkExaMcp(await getExaApiKey(true));
           return true;
         } catch {
           return false;
@@ -275,7 +271,7 @@ export default async function (pi: ExtensionAPI) {
         `- MCP uses API key: ${config.mcpUseApiKey ? "yes" : "no"}`,
         "",
         "Exa MCP",
-        `- MCP tools registered: ${mcpToolsLoaded ? "yes" : "no"}`,
+        "- MCP tool definitions: pinned locally",
         `- MCP live check: ${mcpHealthy ? "success" : "failed"}`,
         "",
         "Tool Management",
@@ -472,50 +468,27 @@ export default async function (pi: ExtensionAPI) {
   });
   registeredExaToolNames.push("deep_search_exa");
 
-  // load Exa MCP tools
-  const tools = await getExaMcpTools(await getExaApiKey(true));
-  mcpToolsLoaded = tools.length > 0;
-
-  const mcpPromptMetadata: Record<
-    string,
-    { promptSnippet: string; promptGuidelines: string[] }
-  > = {
-    web_search_exa: {
-      promptSnippet:
-        "Search the web for current information and return clean result content",
-      promptGuidelines: [
-        "Use web_search_exa for simple web searches, current information, news, facts, people, companies, or answering questions about any topic.",
-      ],
-    },
-    web_fetch_exa: {
-      promptSnippet:
-        "Fetch full clean markdown content from known webpage URLs",
-      promptGuidelines: [
-        "Use web_fetch_exa to read full clean markdown content from known webpage URLs.",
-      ],
-    },
-  };
-
-  for (const tool of tools) {
+  for (const tool of EXA_MCP_TOOLS) {
     registeredExaToolNames.push(tool.name);
 
     pi.registerTool({
       name: tool.name,
       label: tool.name,
-      description: tool.description ?? "",
-      ...mcpPromptMetadata[tool.name],
-      parameters: Type.Unsafe(tool.inputSchema),
+      description: tool.description,
+      promptSnippet: tool.promptSnippet,
+      promptGuidelines: [...tool.promptGuidelines],
+      parameters: tool.parameters,
 
       renderCall: renderCall(tool.name),
       renderResult: renderTruncatedResult,
 
       async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
         try {
-          const mcpClient = await getExaMcp(await getExaApiKey(true));
-          const result = await mcpClient.callTool(
-            { name: tool.name, arguments: params as Record<string, unknown> },
-            undefined,
-            { signal },
+          const result = await callExaMcpTool(
+            tool.name,
+            params as Record<string, unknown>,
+            await getExaApiKey(true),
+            signal,
           );
 
           const content = result.content as Array<{

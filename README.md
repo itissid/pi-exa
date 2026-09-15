@@ -30,8 +30,8 @@ pi /exa-login
 ### MCP
 
 - Use web search and content fetching with **no API key required**
-- Lazy-loaded Exa MCP server that only connects on first tool call
-- Cached MCP tool schemas, Pi registers MCP tools during startup without connecting to the MCP server
+- Locally pinned MCP tool names, descriptions, and input schemas prevent the remote server from redefining Pi's tool surface
+- Lazy-loaded Exa MCP connection with bounded connection and request timeouts
 - Toggle paid Exa MCP usage with `/exa-mcp-use-api-key on|off`
 
 ### Advanced Web Search
@@ -54,8 +54,8 @@ pi /exa-login
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `/exa-enable`                  | Enables the pi-exa extension and restores its available tools                                                                       |
 | `/exa-disable`                 | Disables the pi-exa extension and hides all Exa tools from the agent                                                                |
-| `/exa-login`                   | Writes your Exa API key to `.pi/agents/auth.json`                                                                                  |
-| `/exa-logout`                  | Removes your API key from `.pi/agents/auth.json`                                                                                   |
+| `/exa-login`                   | Writes your Exa API key to `.pi/agent/auth.json`                                                                                   |
+| `/exa-logout`                  | Removes your API key from `.pi/agent/auth.json`                                                                                    |
 | `/exa-status`                  | Shows the Pi Exa extension status                                                                                                  |
 | `/exa-advanced-search on\|off` | Toggles the advanced Exa web search tool                                                                                           |
 | `/exa-deep-search on\|off`     | Toggles the Exa deep search tool. Requires an Exa API key                                                                          |
